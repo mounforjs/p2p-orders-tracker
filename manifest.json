@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Binance C2C Helper",
+  "version": "1.0",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://c2c.binance.com/*/fiatOrder*",
+        "https://c2c.binance.com/*/fiatOrderDetail*",
+        "https://c2c.binance.com/*/fiatOrderDetail*",
+        "https://www.banesconline.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ]
+}

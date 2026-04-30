@@ -1,0 +1,43 @@
+ LEA CON ATENCIÓN ANTES DE CREAR LA ORDEN - TÉRMINOS Y CONDICIONES 🚨
+
+si cancelas con pagomovil no marques pagado hasta que yo corrobore estoy en linea
+
+ Al crear la orden, usted acepta irrevocablemente todos los puntos aquí expuestos.
+
+1. PROCEDENCIA LÍCITA Y BUENA FE:
+
+· Usted declara bajo su propia responsabilidad que los fondos utilizados para esta compra son de origen lícito, provenientes de actividades legítimas conforme a las leyes de la República Bolivariana de Venezuela (Ley Orgánica contra el Lavado de Capitales y el Financiamiento al Terrorismo - LOCLyFTT).
+· Los fondos provenientes de esta transacción, NO guardan relación alguna con actividad ilícita. Ambas partes actuamos como operadores de buena fe.
+
+✅ RESUMEN: AL CREAR LA ORDEN, USTED CONFIRMA QUE:
+
+· Su perfil está verificado y no es nuevo.
+· Sus fondos son de origen lícito.
+· Acepta las condiciones bancarias antes mencionadas.
+-solo titulares
+
+
+Pending payment
+
+<select class="form-control valid" id="pref" name="prefijo" required="" aria-invalid="false">
+
+                            <option value="0416"> 0416</option>
+                            <option value="0426"> 0426</option>
+                            <option value="0414"> 0414</option>
+                            <option value="0424"> 0424</option>
+                            <option value="0412"> 0412</option>
+                            <option value="0422"> 0422</option>
+//end foreach
+                    </select>
+
+
+
+
+
+
+
+
+<td aria-colindex="6" role="cell" class="bn-web-table-cell bn-web-table-cell-fix-right bn-web-table-cell-fix-right-first" style="position: sticky; right: 0px;"><div class="bn-flex flex-col"><div class="bn-flex flex-col"><div class="bn-flex items-center gap-4xs flex-wrap"><a class="text-PrimaryText tablet:underline cursor-pointer" href="https://c2c.binance.com/fiatOrderDetail?orderNo=22883152642943619072&amp;createdAt=1777554002534">Pending payment</a><span class="text-TextLink">04:50</span></div></div><div class="bn-flex tablet:[&amp;&gt;*:not(:last-child)]:mr-0 pr-0 tablet:pr-[4px] tablet:justify-start justify-end items-center gap-2xs [&amp;&gt;*:not(:last-child)]:mr-[14px]"></div></div></td>
+
+
+<input type="text" class="form-control" name="concepto" id="concepto" placeholder="Concepto de la transferencia" pattern="[A-Za-z0-9 ]{3,30}" maxlength="30">
