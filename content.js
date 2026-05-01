@@ -3,7 +3,6 @@
     const POLLING_TIME = 3000;
 
     // --- 1. CONFIGURACIÓN DE ADAPTADORES POR BANCO ---
-    // Aquí es donde añadirás nuevos bancos fácilmente
     const BANK_ADAPTERS = {
         "BANESCO": {
             domain: "banesconline.com",
@@ -39,16 +38,38 @@
         "VENEZUELA": {
             domain: "bdvenlinea.banvenez.com",
             fill: (data, utils) => {
-                // Ejemplo de cómo añadirías la lógica para el BDV
                 if (data.monto) utils.inyectar(['#montoTransferencia'], data.monto);
                 if (data.cedula) utils.inyectar(['#documentoIdentidad'], data.cedula);
-                // ... lógica específica del BDV
+                // Aquí agregarías selectores específicos del BDV
             }
         }
     };
 
-    // --- 2. LÓGICA DE CAPTURA (BINANCE) ---
-    // (Mantenemos tus funciones originales de extracción de Binance)
+    // --- 2. LÓGICA DE TOTALIZACIÓN ---
+    const actualizarTotalizador = () => {
+        chrome.storage.local.get(['savedOrders'], (result) => {
+            const savedOrders = result.savedOrders || {};
+            let total = 0;
+
+            Object.values(savedOrders).forEach(order => {
+                if (order.fiatAmount) {
+                    // Convertimos "1.250,50" -> 1250.50 para sumar matemáticamente
+                    let valorLimpio = order.fiatAmount.replace(/\./g, '').replace(',', '.');
+                    let num = parseFloat(valorLimpio);
+                    if (!isNaN(num)) total += num;
+                }
+            });
+
+            chrome.storage.local.set({
+                totalFiatAmount: total,
+                totalFiatAmountFormated: total.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            }, () => {
+                console.log(`%c📊 Totalizador actualizado: ${total.toFixed(2)}`, "color: #00e5ff; font-weight: bold;");
+            });
+        });
+    };
+
+    // --- 3. LÓGICA DE CAPTURA (BINANCE) ---
     const limpiarNumero = (texto, esFiatAmount = false) => {
         if (!texto || texto === "No encontrado") return null;
         let numStr = texto.replace(/[^\d.]/g, '');
@@ -89,7 +110,71 @@
         };
     }
 
-    // --- 3. UTILIDADES DE INYECCIÓN ---
+    function ejecutarCapturaLista() {
+        const rows = document.querySelectorAll('tr.bn-web-table-row');
+        if (rows.length === 0) return;
+
+        chrome.storage.local.get(['savedOrders'], (result) => {
+            let savedOrders = result.savedOrders || {};
+            let nuevas = 0;
+
+            rows.forEach((row) => {
+                const statusCell = row.querySelector('td[aria-colindex="6"]');
+                const statusAnchor = statusCell ? statusCell.querySelector('a') : null;
+                const statusText = statusAnchor ? statusAnchor.innerText.trim() : "";
+
+                if (statusText === "Pending payment") {
+                    const orderLink = row.querySelector('td[aria-colindex="2"] a');
+                    const priceCell = row.querySelector('td[aria-colindex="3"] .text-PrimaryText');
+
+                    if (orderLink && priceCell) {
+                        const orderId = orderLink.innerText.trim();
+                        if (!savedOrders[orderId]) {
+                            savedOrders[orderId] = {
+                                orden: orderId,
+                                price: limpiarNumero(priceCell.innerText.trim()),
+                                estado: statusText,
+                                fecha: new Date().toLocaleString()
+                            };
+                            nuevas++;
+                        }
+                    }
+                }
+            });
+
+            if (nuevas > 0) {
+                chrome.storage.local.set({ savedOrders }, () => {
+                    actualizarTotalizador();
+                });
+            }
+        });
+    }
+
+    function ejecutarCapturaDetalle(orderNo) {
+        if (!orderNo) return;
+        const datos = extraerDatosDetalle();
+
+        if (datos.fullName || datos.fiatAmount || datos.accountNumber) {
+            chrome.storage.local.get(['savedOrders'], (result) => {
+                let savedOrders = result.savedOrders || {};
+                const orderData = savedOrders[orderNo] || {};
+
+                const hayCambio = orderData.fullName !== datos.fullName ||
+                    orderData.fiatAmount !== datos.fiatAmount ||
+                    orderData.accountNumber !== datos.accountNumber;
+
+                if (hayCambio) {
+                    savedOrders[orderNo] = { ...orderData, ...datos, ultimaActualizacion: new Date().toLocaleString() };
+                    chrome.storage.local.set({ savedOrders }, () => {
+                        actualizarTotalizador();
+                        console.table(savedOrders[orderNo]);
+                    });
+                }
+            });
+        }
+    }
+
+    // --- 4. UTILIDADES Y LISTENERS ---
     function buscarInputRecursivo(doc, selectores) {
         let el = null;
         for (let sel of selectores) {
@@ -132,24 +217,14 @@
         return entrada ? entrada[0] : null;
     }
 
-    // --- 4. EL LISTENER MAESTRO ---
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === "FILL_ALL_DATA") {
             const urlActual = window.location.href;
+            const keyAdaptador = Object.keys(BANK_ADAPTERS).find(key => urlActual.includes(BANK_ADAPTERS[key].domain));
 
-            // Buscamos qué adaptador coincide con la URL donde estamos parados
-            const keyAdaptador = Object.keys(BANK_ADAPTERS).find(key =>
-                urlActual.includes(BANK_ADAPTERS[key].domain)
-            );
-
-            if (!keyAdaptador) {
-                console.warn("⚠️ No hay un adaptador configurado para este dominio bancario.");
-                return;
-            }
+            if (!keyAdaptador) return;
 
             const adaptador = BANK_ADAPTERS[keyAdaptador];
-
-            // Objeto de herramientas para que el adaptador sea limpio
             const utils = {
                 inyectar: (selectores, valor) => inyectarValor(buscarInputRecursivo(document, selectores), valor),
                 buscar: (selectores) => buscarInputRecursivo(document, selectores),
@@ -160,18 +235,65 @@
                     return { prefijo: limpio.substring(0, 4), numero7: limpio.slice(-7) };
                 }
             };
-
-            console.log(`🚀 Ejecutando Adaptador: ${keyAdaptador}`);
             adaptador.fill(request.data, utils);
         }
     });
 
-    // --- 5. MONITOREO ---
+    // Observer para recalcular total si se borran órdenes desde el popup u otra parte
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.savedOrders) {
+            actualizarTotalizador();
+        }
+    });
+
     function gestionarRutaActual() {
         const url = window.location.href;
         const urlParams = new URLSearchParams(window.location.search);
-        if (url.includes("fiatOrder") && urlParams.get('tab') === '1') ejecutarCapturaLista();
-        else if (url.includes("fiatOrderDetail")) ejecutarCapturaDetalle(urlParams.get('orderNo'));
+
+        if (url.includes("fiatOrder") && urlParams.get('tab') === '1') {
+            ejecutarCapturaLista();
+        } else if (url.includes("fiatOrderDetail")) {
+            ejecutarCapturaDetalle(urlParams.get('orderNo'));
+        }
+        // --- NUEVA CONDICIÓN ---
+        else if (url.includes("advEdit")) {
+            ejecutarLogicaAdvEdit();
+        }
+    }
+
+    function extraerPrecioAdvEdit() {
+        // 1. Buscamos todos los div que puedan contener la fórmula
+        // Usamos el patrón que ya sabemos que funciona: el que tiene el '*' y el '%'
+        const divs = Array.from(document.querySelectorAll('div'));
+        const formulaNode = divs.find(el =>
+            el.innerText.includes('*') &&
+            el.innerText.includes('%') &&
+            el.children.length === 0 // Nos aseguramos de que sea el nodo final de texto
+        );
+
+        if (formulaNode) {
+            const texto = formulaNode.innerText.trim();
+            // 2. Extraemos el primer grupo de números (incluyendo puntos)
+            const match = texto.match(/^([\d.]+)/);
+
+            if (match) {
+                const valorExtraido = match[1];
+                console.log(`%c🎯 Precio de Referencia: ${valorExtraido}`, "color: #f3ba2f; font-weight: bold;");
+                return valorExtraido;
+            }
+        }
+        console.warn("⚠️ No se encontró el nodo de la fórmula en esta vista.");
+        return null;
+    }
+
+    function ejecutarLogicaAdvEdit() {
+        console.log("%c🚀 Estás en la página de edición de anuncios (advEdit)", "color: #ff9800; font-weight: bold;");
+        const precio = extraerPrecioAdvEdit();
+        if (precio) {
+            // Guardamos en storage para que otras partes de la extensión lo usen
+            chrome.storage.local.set({ ultimoPrecioBCVReferencia: precio });
+        }
+
     }
 
     function iniciarMonitoreo() {
@@ -187,6 +309,7 @@
     function detenerMonitoreo() {
         if (intervalId) { clearInterval(intervalId); intervalId = null; }
     }
+
 
     chrome.storage.local.get(['isActive'], (res) => { if (res.isActive) iniciarMonitoreo(); });
 })();

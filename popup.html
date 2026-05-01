@@ -117,6 +117,37 @@
       padding: 40px;
     }
 
+    .total-container {
+      background: #1e2329;
+      /* Fondo oscuro tipo Binance */
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid #f3ba2f;
+      /* Borde amarillo Binance */
+    }
+
+    .total-label {
+      color: #eaecef;
+      font-size: 14px;
+    }
+
+    .total-value {
+      color: #f3ba2f;
+      font-size: 20px;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+    }
+
+    .total-currency {
+      color: #848e9c;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+
     /* ... Tus estilos de colores anteriores (col-order, col-fiat, etc.) ... */
   </style>
 </head>
@@ -136,6 +167,12 @@
   </div>
 
   <div id="data" class="content">
+
+    <div class="total-container">
+      <span class="total-label">Monto Total Pendiente:</span>
+      <span id="total-display" class="total-value">0,00</span>
+      <span class="total-currency">VES</span>
+    </div>
     <div class="scroll-area">
       <table id="mainTable">
         <thead>
