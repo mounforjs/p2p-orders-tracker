@@ -15,11 +15,43 @@
         "https://c2c.binance.com/*/fiatOrder*",
         "https://c2c.binance.com/*/fiatOrderDetail*",
         "https://c2c.binance.com/*/fiatOrderDetail*",
-        "https://www.banesconline.com/*"
+        "https://www.banesconline.com/*",
+        "https://p2p.binance.com/*/trade/*"
       ],
       "js": [
         "content.js"
       ]
+    },
+    {
+      "matches": [
+        "https://p2p.binance.com/*/trade/*",
+        "https://c2c.binance.com/*trade/*"
+      ],
+      "js": [
+        "content-tracker.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://*.banesconline.com/*",
+        "https://bdvenlinea.banvenez.com/*",
+        "https://*.mercantilbanco.com/*"
+      ],
+      "js": [
+        "content_saldos.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://*.banesconline.com/*"
+      ],
+      "js": [
+        "content_keepalive.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ]
 }
