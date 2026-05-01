@@ -284,4 +284,21 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.set({ keepAliveActive: keepAliveToggle.checked });
   });
 
+
+  //TOGGLE ORDERS
+  const bcvCaptureToggle = document.getElementById('bcvCaptureToggle');
+
+  // 1. Cargar estado inicial desde el storage
+  chrome.storage.local.get(['bcvCaptureActive'], (result) => {
+    bcvCaptureToggle.checked = result.bcvCaptureActive || false;
+  });
+
+  // 2. Guardar cuando el usuario cambie el switch
+  bcvCaptureToggle.addEventListener('change', () => {
+    const estado = bcvCaptureToggle.checked;
+    chrome.storage.local.set({ bcvCaptureActive: estado }, () => {
+      console.log("Captura BCV establecida en:", estado);
+    });
+  });
+
 });

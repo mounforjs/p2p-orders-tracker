@@ -52,6 +52,16 @@
       ],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "https://*.binance.com/*/advEdit*",
+        "https://*.binance.com/advEdit*"
+      ],
+      "js": [
+        "content_order_monitor.js"
+      ],
+      "run_at": "document_start"
     }
   ]
 }
