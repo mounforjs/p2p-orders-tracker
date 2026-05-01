@@ -3,12 +3,18 @@
     const POLLING_TIME = 3000;
 
     // --- 1. CONFIGURACIÓN DE ADAPTADORES POR BANCO ---
+    // --- 1. CONFIGURACIÓN DE ADAPTADORES POR BANCO ---
     const BANK_ADAPTERS = {
         "BANESCO": {
             domain: "banesconline.com",
             fill: (data, utils) => {
                 if (data.monto) utils.inyectar(['#monto'], data.monto);
-                if (data.cedula) utils.inyectar(['#ced'], data.cedula);
+
+                // LIMPIEZA FORZADA DE CÉDULA ANTES DE INYECTAR
+                if (data.cedula) {
+                    const cedulaSoloNumeros = data.cedula.toString().replace(/\D/g, '');
+                    utils.inyectar(['#ced'], cedulaSoloNumeros);
+                }
 
                 if (data.telefono) {
                     const { prefijo, numero7 } = utils.procesarTelefono(data.telefono);
@@ -22,16 +28,20 @@
 
                 if (data.bankName) {
                     const cod = utils.obtenerCodigo(data.bankName);
-                    const selBanco = utils.buscar(['#banco', 'select[name="banco"]']);
+                    const selBanco = utils.buscar(['#banco', 'select[name="banco"]', 'select[id*="banco"]']);
                     if (selBanco && cod) {
                         selBanco.value = cod;
                         selBanco.dispatchEvent(new Event('change', { bubbles: true }));
+                        console.log(`%c🏦 Banco seleccionado: ${data.bankName} (${cod})`, "color: #00ff00");
+                    } else {
+                        console.warn("⚠️ No se encontró el select del banco o el código para:", data.bankName);
                     }
                 }
 
+                // 5. Concepto (Opcional)
                 if (data.fullName) {
-                    const concepto = `Pago ${data.fullName.trim().split(' ')[0]}`;
-                    utils.inyectar(['#concepto', 'input[name="concepto"]'], concepto);
+                    const nombreLimpio = data.fullName.trim().split(' ')[0];
+                    utils.inyectar(['#concepto', 'input[name="concepto"]'], `Pago ${nombreLimpio}`);
                 }
             }
         },
@@ -39,8 +49,12 @@
             domain: "bdvenlinea.banvenez.com",
             fill: (data, utils) => {
                 if (data.monto) utils.inyectar(['#montoTransferencia'], data.monto);
-                if (data.cedula) utils.inyectar(['#documentoIdentidad'], data.cedula);
-                // Aquí agregarías selectores específicos del BDV
+
+                // LIMPIEZA FORZADA DE CÉDULA ANTES DE INYECTAR
+                if (data.cedula) {
+                    const cedulaSoloNumeros = data.cedula.toString().replace(/\D/g, '');
+                    utils.inyectar(['#documentoIdentidad'], cedulaSoloNumeros);
+                }
             }
         }
     };
