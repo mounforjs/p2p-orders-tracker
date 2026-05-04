@@ -1,22 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // --- REFERENCIAS UI: NAVEGACIÓN ---
+  // --- 1. REFERENCIAS UI ---
   const tabButtons = document.querySelectorAll('.tab-btn');
   const contents = document.querySelectorAll('.content');
 
-  // --- REFERENCIAS UI: TRACKER ---
-  const trackerDisplay = document.getElementById('data-display');
+  // Tracker & Global Toggles
   const autoRunToggle = document.getElementById('autoRunToggle');
   const filterAmountInput = document.getElementById('filterAmount');
+  const trackerDisplay = document.getElementById('data-display');
+  const bcvToggle = document.getElementById('bcvCaptureToggle');
+  const balanceToggle = document.getElementById('balanceMonitorToggle');
+  const keepAliveToggle = document.getElementById('keepAliveToggle');
+  const debugToggle = document.getElementById('debugToggle');
 
-  // --- REFERENCIAS UI: BANCOS/ÓRDENES ---
+  // Bancos & Órdenes
   const tableBody = document.getElementById('tableBody');
-  const noDataMsg = document.getElementById('noDataMsg');
-  const activeToggle = document.getElementById('activeToggle');
   const totalDisplay = document.getElementById('total-display');
-  const clearDataBtn = document.getElementById('clearDataBtn');
-  const testDataBtn = document.getElementById('testDataBtn');
+  const activeToggle = document.getElementById('activeToggle');
+  const settingsContainer = document.getElementById('orderSettingsContainer');
 
-  // --- 1. LÓGICA DE PESTAÑAS ---
+  // --- 2. NAVEGACIÓN (TABS) ---
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const target = btn.getAttribute('data-target');
@@ -24,102 +26,168 @@ document.addEventListener('DOMContentLoaded', () => {
       contents.forEach(c => c.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(target).classList.add('active');
-      if (target === 'data') renderTable(); // Renderizar tabla al entrar en la pestaña
+      if (target === 'data') renderTable();
     });
   });
 
-  // --- 2. CARGA INICIAL Y ESTADOS ---
+
+
+
+
+  // --- 3. CARGA INICIAL INTEGRADA ---
   chrome.storage.local.get([
-    'autoRun',
-    'p2p_stats',
-    'filterAmount',
-    'isActive',
-    'totalFiatAmountFormated',
-    'savedOrders'
+    'autoRun', 'p2p_stats', 'filterAmount', 'isActive',
+    'totalFiatAmountFormated', 'savedOrders', 'bankBalances',
+    'balanceMonitorActive', 'debugMode', 'keepAliveActive',
+    'bcvCaptureActive', 'totalAmount', 'minLimit', 'maxLimit', 'centimosDebajo', 'minSpread', 'maxSpread',
   ], (res) => {
-    // Estado Toggles
+    // Toggles de estado
     if (autoRunToggle) autoRunToggle.checked = !!res.autoRun;
     if (activeToggle) activeToggle.checked = !!res.isActive;
+    if (balanceToggle) balanceToggle.checked = !!res.balanceMonitorActive;
+    if (keepAliveToggle) keepAliveToggle.checked = !!res.keepAliveActive;
+    if (debugToggle) debugToggle.checked = !!res.debugMode;
+    if (bcvToggle) {
+      bcvToggle.checked = !!res.bcvCaptureActive;
+      updateOrderUIStatus(res.bcvCaptureActive);
+    }
 
-    // Datos Tracker
-    if (res.p2p_stats) updateTrackerUI(JSON.parse(res.p2p_stats));
+    // Inputs de Texto/Número
+    if (res.minSpread) document.getElementById('minSpread').value = res.minSpread;
+    if (res.maxSpread) document.getElementById('maxSpread').value = res.maxSpread;
     if (res.filterAmount && filterAmountInput) filterAmountInput.value = res.filterAmount;
+    if (res.totalAmount) document.getElementById('totalAmount').value = res.totalAmount;
+    if (res.minLimit) document.getElementById('minLimit').value = res.minLimit;
+    if (res.maxLimit) document.getElementById('maxLimit').value = res.maxLimit;
+    if (res.centimosDebajo) document.getElementById('centimosDebajo').value = res.centimosDebajo;
 
-    // Datos Bancos
-    if (totalDisplay) totalDisplay.innerText = res.totalFiatAmountFormated || "0,00";
+    // UI Dinámica
+    if (res.p2p_stats) updateTrackerUI(JSON.parse(res.p2p_stats));
+    if (res.totalFiatAmountFormated) totalDisplay.innerText = res.totalFiatAmountFormated;
+    if (res.bankBalances) updateBalancesUI(res.bankBalances);
+
     renderTable();
+
+
   });
 
-  // --- 3. EVENTOS DEL TRACKER ---
-  if (autoRunToggle) {
-    autoRunToggle.addEventListener('change', () => {
-      chrome.storage.local.set({ autoRun: autoRunToggle.checked });
-    });
+  // --- 4. EVENTOS DE CONFIGURACIÓN (TRACKER & SISTEMA) ---
+  autoRunToggle?.addEventListener('change', () => chrome.storage.local.set({ autoRun: autoRunToggle.checked }));
+  activeToggle?.addEventListener('change', () => chrome.storage.local.set({ isActive: activeToggle.checked }));
+  balanceToggle?.addEventListener('change', () => chrome.storage.local.set({ balanceMonitorActive: balanceToggle.checked }));
+  keepAliveToggle?.addEventListener('change', () => chrome.storage.local.set({ keepAliveActive: keepAliveToggle.checked }));
+  debugToggle?.addEventListener('change', () => chrome.storage.local.set({ debugMode: debugToggle.checked }));
+
+  filterAmountInput?.addEventListener('input', (e) => chrome.storage.local.set({ filterAmount: e.target.value }));
+
+  // --- 5. LÓGICA DE ÓRDENES (MONITOR) ---
+  bcvToggle?.addEventListener('change', () => {
+    const active = bcvToggle.checked;
+    chrome.storage.local.set({ bcvCaptureActive: active });
+    updateOrderUIStatus(active);
+  });
+
+  function updateOrderUIStatus(isActive) {
+    if (!settingsContainer) return;
+    settingsContainer.style.opacity = isActive ? "1" : "0.5";
+    settingsContainer.style.pointerEvents = isActive ? "auto" : "none";
+    settingsContainer.querySelectorAll('input, button').forEach(el => el.disabled = !isActive);
   }
 
-  if (filterAmountInput) {
-    filterAmountInput.addEventListener('input', (e) => {
-      chrome.storage.local.set({ filterAmount: e.target.value });
-    });
-  }
+  // --- DENTRO DE popup.js ---
 
+  document.getElementById('saveOrderSettings').addEventListener('click', () => {
+    // Capturamos todos los valores de los inputs
+    const config = {
+      minSpread: parseFloat(document.getElementById('minSpread').value),
+      maxSpread: parseFloat(document.getElementById('maxSpread').value),
+      maxOrdersCount: parseInt(document.getElementById('maxOrdersCount').value),
+      maxFiatTotal: parseFloat(document.getElementById('maxFiatTotal').value),
+      totalAmount: parseFloat(document.getElementById('totalAmount').value),
+      minLimit: parseFloat(document.getElementById('minLimit').value),
+      maxLimit: parseFloat(document.getElementById('maxLimit').value),
+      centimosDebajo: parseFloat(document.getElementById('centimosDebajo').value)
+    };
+
+    // Guardamos todo el objeto en el storage
+    chrome.storage.local.set(config, () => {
+      // Feedback visual en el botón
+      const btn = document.getElementById('saveOrderSettings');
+      const originalText = btn.innerText;
+
+      btn.innerText = "✅ ¡GUARDADO!";
+      btn.style.background = "#218c53"; // Un verde más oscuro
+
+      console.log("Configuración actualizada:", config);
+
+      // Restauramos el botón tras 1.5 segundos
+      setTimeout(() => {
+        btn.innerText = originalText;
+        btn.style.background = "#27ae60";
+      }, 1500);
+    });
+
+  });
+
+  // --- 6. FUNCIONES DE RENDERIZADO ---
   function updateTrackerUI(stats) {
     if (!trackerDisplay) return;
     trackerDisplay.innerHTML = `
-      <p><span class="bold">Compra:</span> ${stats.sell_price}</p>
-      <p><span class="bold">Venta:</span> ${stats.buy_price}</p>
-      <p><span class="bold">Spread:</span> ${stats.spread_percent}%</p>
-      <p style="color: #666; font-size: 9px;">Actualizado: ${stats.last_update}</p>
-    `;
+            <p><span class="bold">Compra:</span> ${stats.sell_price}</p>
+            <p><span class="bold">Venta:</span> ${stats.buy_price}</p>
+            <p><span class="bold">Spread:</span> ${stats.spread_percent}%</p>
+            <p style="color: #666; font-size: 9px;">Actualizado: ${stats.last_update}</p>
+        `;
   }
 
-  // --- 4. EVENTOS DE BANCOS/ÓRDENES ---
-  if (activeToggle) {
-    activeToggle.addEventListener('change', () => {
-      chrome.storage.local.set({ isActive: activeToggle.checked });
-    });
+  function updateBalancesUI(balances) {
+    const container = document.getElementById('balances-container');
+    if (!container) return;
+
+    if (!balances || Object.keys(balances).length === 0) {
+      container.innerHTML = `<div class="no-data">Esperando conexión...</div>`;
+      return;
+    }
+
+    container.innerHTML = Object.entries(balances).map(([bankKey, data]) => {
+      // Priorizamos el nombre que viene del storage, si no, usamos el fallback
+      const name = data.bankName || bankKey.split('.')[1]?.toUpperCase() || bankKey;
+
+      return `
+            <div class="balance-item" style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0;">
+                <span style="font-size:11px; font-weight:bold;">${name}</span>
+                <div style="text-align:right;">
+                    <span style="color:#27ae60; font-weight:bold;">${data.amount} VES</span>
+                    <div style="font-size:9px; color:#999;">${data.lastUpdate}</div>
+                </div>
+            </div>`;
+    }).join('');
   }
 
-  // --- MODIFICACIÓN EN renderTable ---
   function renderTable() {
     if (!tableBody) return;
-    tableBody.innerHTML = '';
-
     chrome.storage.local.get(['savedOrders'], (res) => {
       const orders = res.savedOrders || {};
-      const orderIds = Object.keys(orders).sort((a, b) => {
-        const dateA = new Date(orders[a].ultimaActualizacion || orders[a].fecha);
-        const dateB = new Date(orders[b].ultimaActualizacion || orders[b].fecha);
-        return dateB - dateA;
-      });
+      tableBody.innerHTML = '';
+      const orderIds = Object.keys(orders).sort((a, b) => new Date(orders[b].ultimaActualizacion || orders[b].fecha) - new Date(orders[a].ultimaActualizacion || orders[a].fecha));
 
-      if (orderIds.length === 0) {
-        if (noDataMsg) noDataMsg.style.display = 'block';
-        return;
-      }
-
-      if (noDataMsg) noDataMsg.style.display = 'none';
+      document.getElementById('noDataMsg').style.display = orderIds.length === 0 ? 'block' : 'none';
 
       orderIds.forEach(id => {
         const o = orders[id];
-
-        // LIMPIEZA DE CÉDULA: Solo números
         const cleanCedula = o.idNumber ? o.idNumber.toString().replace(/\D/g, '') : '---';
-
         const tr = document.createElement('tr');
         tr.innerHTML = `
-                <td class="col-order">...${id.slice(-6)}</td>
-                <td class="col-fiat">${o.fiatAmount || '-'}</td>
-                <td class="col-name" title="${o.fullName || ''}">${o.fullName || '---'}</td>
-                <td class="col-info">${cleanCedula}</td> <!-- Cédula Limpia -->
-                <td class="col-phone">${o.phoneNumber || '---'}</td> <!-- TELÉFONO AÑADIDO -->
-                <td class="col-bank">${o.bankName || '---'}</td>
-                <td>
-                    <button class="btn-action btn-fill">Fill</button>
-                    <button class="btn-action btn-delete">X</button>
-                </td>
-            `;
-
+                    <td class="col-order">...${id.slice(-6)}</td>
+                    <td class="col-fiat">${o.fiatAmount}</td>
+                    <td class="col-name">${o.fullName}</td>
+                    <td class="col-info">${cleanCedula}</td>
+                    <td class="col-phone">${o.phoneNumber || '---'}</td>
+                    <td class="col-bank">${o.bankName}</td>
+                    <td>
+                        <button class="btn-action btn-fill">Fill</button>
+                        <button class="btn-action btn-delete">X</button>
+                    </td>`;
         tr.querySelector('.btn-fill').addEventListener('click', () => inyectarEnBanco(o));
         tr.querySelector('.btn-delete').addEventListener('click', () => eliminarRegistro(id));
         tableBody.appendChild(tr);
@@ -127,18 +195,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- 7. ACCIONES DE TABLA ---
   function inyectarEnBanco(order) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) {
         chrome.tabs.sendMessage(tabs[0].id, {
           action: "FILL_ALL_DATA",
-          data: {
-            monto: order.fiatAmount,
-            cedula: order.idNumber,
-            telefono: order.phoneNumber,
-            bankName: order.bankName,
-            fullName: order.fullName
-          }
+          data: { monto: order.fiatAmount, cedula: order.idNumber, telefono: order.phoneNumber, bankName: order.bankName, fullName: order.fullName }
         });
       }
     });
@@ -152,153 +215,53 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (clearDataBtn) {
-    clearDataBtn.addEventListener('click', () => {
-      if (confirm("¿Borrar todos los registros?")) {
-        chrome.storage.local.remove(['savedOrders'], renderTable);
-      }
-    });
-  }
-
-  // --- 5. ESCUCHA DE CAMBIOS EN TIEMPO REAL ---
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
-
-    // Si cambian los precios del Tracker
-    if (changes.p2p_stats) {
-      updateTrackerUI(JSON.parse(changes.p2p_stats.newValue));
-    }
-
-    // Si cambia el total de órdenes o la lista
-    if (changes.totalFiatAmountFormated) {
-      if (totalDisplay) totalDisplay.innerText = changes.totalFiatAmountFormated.newValue;
-    }
-
-    if (changes.savedOrders) {
-      renderTable();
-    }
+  document.getElementById('clearDataBtn')?.addEventListener('click', () => {
+    if (confirm("¿Borrar todos los registros?")) chrome.storage.local.remove(['savedOrders'], renderTable);
   });
 
-  // --- MODIFICACIÓN EN BOTÓN DE TEST (Con teléfono y cédula sucia para probar limpieza) ---
-  if (testDataBtn) {
-    testDataBtn.addEventListener('click', () => {
-      const mockId = "TEST_" + Math.floor(Math.random() * 1000);
-      const mock = {
-        [mockId]: {
-          fiatAmount: "1.500,00",
-          fullName: "JOSE PEREZ",
-          idNumber: "V-26.123.456", // Se limpiará al renderizar
-          phoneNumber: "04121234567", // Teléfono incluido
-          bankName: "Banesco",
+  document.getElementById('testDataBtn')?.addEventListener('click', () => {
+    const montoPrueba = 400.50; // Es mejor usar números reales para probar decimales
+
+    chrome.storage.local.get(['savedOrders'], (res) => {
+      let ordenesExistentes = res.savedOrders || {};
+
+      for (let i = 0; i < 5; i++) {
+        const id = "TEST_" + Date.now() + "_" + i;
+        ordenesExistentes[id] = {
+          id: id,
+          fiatAmount: montoPrueba,
+          monto: montoPrueba,
+          bankName: "BANCO DE VENEZUELA", // Nombre que tu "obtenerCodigo" reconozca
+          cedula: "25123456",            // Con letra para probar tu regex de limpieza
+          telefono: "04121234567",        // Propiedad que faltaba
+          fullName: `ORDEN PRUEBA ${i + 1}`,
           fecha: new Date().toLocaleString()
-        }
-      };
-      chrome.storage.local.get(['savedOrders'], (res) => {
-        const updated = { ...(res.savedOrders || {}), ...mock };
-        chrome.storage.local.set({ savedOrders: updated });
+        };
+      }
+
+      chrome.storage.local.set({ savedOrders: ordenesExistentes }, () => {
+        console.log("✅ Datos de prueba inyectados correctamente:", ordenesExistentes);
+        alert("5 Órdenes de prueba inyectadas. Ahora puedes probar el auto-fill.");
       });
     });
-  }
-
-  // --- 1. FUNCIÓN PARA DIBUJAR LOS SALDOS ---
-  function updateBalancesUI(balances) {
-    const container = document.getElementById('balances-container');
-    if (!container) return;
-
-    // Si no hay datos, mostrar mensaje de espera
-    if (!balances || Object.keys(balances).length === 0) {
-      container.innerHTML = `<div class="no-data" style="padding:10px; font-size:12px;">Esperando conexión con el banco...</div>`;
-      return;
-    }
-
-    // Generar el HTML para cada banco registrado
-    container.innerHTML = Object.entries(balances).map(([bankKey, data]) => {
-      // Limpiamos el nombre (ej: banesconline.com -> BANESCO)
-      const name = bankKey.split('.')[0].toUpperCase().replace('ONLINE', '');
-
-      return `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
-                <span style="font-size: 11px; color: #848e9c; font-weight: bold;">${name}</span>
-                <div style="text-align: right;">
-                    <span style="color: #27ae60; font-weight: bold; font-size: 14px;">${data.amount}</span>
-                    <span style="font-size: 10px; color: #27ae60; font-weight: bold;"> VES</span>
-                    <div style="font-size: 9px; color: #999;">Ref: ${data.lastUpdate}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-  }
-
-  // --- 2. CARGA INICIAL (Dentro de tu chrome.storage.local.get existente) ---
-  // Asegúrate de añadir 'bankBalances' a la lista de llaves que pides al inicio
-  chrome.storage.local.get(['bankBalances', 'p2p_stats', 'savedOrders'], (res) => {
-    if (res.bankBalances) {
-      updateBalancesUI(res.bankBalances);
-    }
-    // ... resto de tus cargas iniciales
   });
 
-  // --- 3. ESCUCHAR CAMBIOS EN TIEMPO REAL ---
-  // Añade esto dentro de tu chrome.storage.onChanged.addListener
+  // --- 8. ESCUCHA DE CAMBIOS REALTIME ---
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local') {
-      if (changes.bankBalances) {
-        console.log("Refrescando UI de saldos...");
-        updateBalancesUI(changes.bankBalances.newValue);
-      }
-      // ... otros cambios (p2p_stats, savedOrders)
-    }
+    if (area !== 'local') return;
+    if (changes.p2p_stats) updateTrackerUI(JSON.parse(changes.p2p_stats.newValue));
+    if (changes.bankBalances) updateBalancesUI(changes.bankBalances.newValue);
+    if (changes.totalFiatAmountFormated) totalDisplay.innerText = changes.totalFiatAmountFormated.newValue;
+    if (changes.savedOrders) renderTable();
+  });
+
+  chrome.storage.local.get(['minSpread', 'maxSpread'], (res) => {
+    document.getElementById('minSpread').value = res.minSpread || 0.40;
+    document.getElementById('maxSpread').value = res.maxSpread || 1.50;
   });
 
 
-  // Dentro de DOMContentLoaded...
-
-  const balanceToggle = document.getElementById('balanceMonitorToggle');
-  const debugToggle = document.getElementById('debugToggle');
-
-  // 1. Cargar estados iniciales
-  chrome.storage.local.get(['balanceMonitorActive', 'debugMode'], (res) => {
-    balanceToggle.checked = !!res.balanceMonitorActive;
-    debugToggle.checked = !!res.debugMode;
-  });
-
-  // 2. Escuchar cambios
-  balanceToggle.addEventListener('change', () => {
-    chrome.storage.local.set({ balanceMonitorActive: balanceToggle.checked });
-  });
-
-  debugToggle.addEventListener('change', () => {
-    chrome.storage.local.set({ debugMode: debugToggle.checked });
-  });
 
 
-  const keepAliveToggle = document.getElementById('keepAliveToggle');
-
-  // Cargar estado inicial
-  chrome.storage.local.get(['keepAliveActive'], (res) => {
-    keepAliveToggle.checked = !!res.keepAliveActive;
-  });
-
-  // Guardar cambios
-  keepAliveToggle.addEventListener('change', () => {
-    chrome.storage.local.set({ keepAliveActive: keepAliveToggle.checked });
-  });
-
-
-  //TOGGLE ORDERS
-  const bcvCaptureToggle = document.getElementById('bcvCaptureToggle');
-
-  // 1. Cargar estado inicial desde el storage
-  chrome.storage.local.get(['bcvCaptureActive'], (result) => {
-    bcvCaptureToggle.checked = result.bcvCaptureActive || false;
-  });
-
-  // 2. Guardar cuando el usuario cambie el switch
-  bcvCaptureToggle.addEventListener('change', () => {
-    const estado = bcvCaptureToggle.checked;
-    chrome.storage.local.set({ bcvCaptureActive: estado }, () => {
-      console.log("Captura BCV establecida en:", estado);
-    });
-  });
 
 });

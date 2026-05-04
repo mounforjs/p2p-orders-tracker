@@ -1,89 +1,234 @@
 // content_order_monitor.js
 (function () {
-    let bcvCaptureActive = false;
     const POLLING_TIME = 5000;
+    let mainInterval = null;
 
-    // 1. CARGAR ESTADO INICIAL
-    chrome.storage.local.get(['bcvCaptureActive'], (res) => {
-        bcvCaptureActive = res.bcvCaptureActive || false;
-        if (bcvCaptureActive) ejecutarLogicaDinamica();
-    });
+    console.log("%c[SISTEMA] 🚀 Monitor de Orden Activo.", "background: #222; color: #bada55; padding: 2px;");
 
-    // 2. ESCUCHAR CAMBIOS (Toggle o nuevos precios P2P)
-    chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && changes.bcvCaptureActive) {
-            bcvCaptureActive = changes.bcvCaptureActive.newValue;
-        }
-    });
+    const isContextValid = () => !!chrome.runtime?.id;
 
-    function ejecutarLogicaDinamica() {
-        if (!bcvCaptureActive) return;
+    function secureInject(inputElement, value, fieldName) {
+        if (!inputElement || !isContextValid() || value === undefined || value === null) return;
+        if (inputElement.value == value) return;
 
-        // Recuperamos las estadísticas guardadas por el tracker
-        chrome.storage.local.get(['p2p_stats'], (res) => {
-            if (!res.p2p_stats) {
-                console.warn("[Monitor] ⚠️ No hay datos de p2p_stats aún.");
-                return;
-            }
+        console.log(`%c[INYECTANDO] ${fieldName} -> ${value}`, "color: #f3ba2f; font-weight: bold;");
 
-            try {
-                const stats = JSON.parse(res.p2p_stats);
-                const valorObjetivo = parseFloat(stats.sell_price); // Extraemos el sell_price
+        inputElement.focus();
+        // Usar execCommand para simular escritura humana y disparar los validadores de Binance
+        document.execCommand('selectAll', false, null);
+        document.execCommand('insertText', false, value);
 
-                if (isNaN(valorObjetivo) || valorObjetivo <= 0) {
-                    console.error("[Monitor] ❌ sell_price no es válido:", stats.sell_price);
-                    return;
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+        inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+
+        setTimeout(() => {
+            if (inputElement) inputElement.blur();
+        }, 100);
+    }
+
+    function verificarFrenosDeEmergencia(res) {
+        chrome.storage.local.get(['savedOrders'], (data) => {
+            const ordenesMap = data.savedOrders || {};
+            const listaOrdenes = Object.values(ordenesMap);
+
+            // DEBUG: Mira esto en la consola para saber qué hay dentro
+            // console.log("Órdenes detectadas por el monitor:", listaOrdenes);
+
+            const totalOrdenesActual = listaOrdenes.length;
+
+            const totalFiatActual = listaOrdenes.reduce((sum, ord) => {
+                // Intentamos obtener el monto de fiatAmount o fiat (por si acaso)
+                let valor = ord.fiatAmount || ord.fiat || 0;
+
+                // Si es un string con "VES", lo limpiamos
+                if (typeof valor === 'string') {
+                    valor = valor.replace(/[^\d.,]/g, '').replace(',', '.');
                 }
 
-                procesarInyeccion(valorObjetivo);
+                return sum + (parseFloat(valor) || 0);
+            }, 0);
 
-            } catch (e) {
-                console.error("[Monitor] ❌ Error parseando p2p_stats:", e);
+            const limiteOrdenes = parseInt(res.maxOrdersCount) || 0;
+            const limiteFiat = parseFloat(res.maxFiatTotal) || 0;
+            const fiatRestante = Math.max(0, limiteFiat - totalFiatActual);
+
+            // LOG DASHBOARD
+            console.log(
+                `%c 📦 Órdenes: ${totalOrdenesActual}/${limiteOrdenes} %c 💰 Fiat: ${totalFiatActual.toLocaleString('es-VE')} VES %c 🏁 Resta: ${fiatRestante.toLocaleString('es-VE')} VES `,
+                "background: #2b3139; color: #f3ba2f; border-radius: 3px 0 0 3px; padding: 2px 5px; border-left: 3px solid #f3ba2f;",
+                "background: #474d57; color: #fff; padding: 2px 5px;",
+                `background: ${fiatRestante <= 0 ? '#ea3943' : '#27ae60'}; color: #fff; border-radius: 0 3px 3px 0; padding: 2px 5px; font-weight: bold;`
+            );
+
+            // DISPARAR OFFLINE
+            if ((limiteOrdenes > 0 && totalOrdenesActual >= limiteOrdenes) ||
+                (limiteFiat > 0 && totalFiatActual >= limiteFiat)) {
+
+                const btnOffline = document.querySelector('input[type="radio"][value="2"]') ||
+                    Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('Offline'));
+
+                if (btnOffline) {
+                    btnOffline.click();
+                    console.log("%c[🛑] LÍMITE ALCANZADO: CAMBIANDO A OFFLINE", "background: red; color: white; padding: 5px;");
+                }
             }
         });
     }
 
-    function procesarInyeccion(valorObjetivo) {
-        // Buscar el nodo de la fórmula BCV (ej: 45.50 * 100%)
-        const formulaNode = Array.from(document.querySelectorAll('div')).find(el =>
-            el.innerText.includes('*') && el.innerText.includes('%') && el.children.length === 0
-        );
 
-        if (!formulaNode) return;
+    function ejecutarLogicaDinamica() {
+        if (!isContextValid()) {
+            console.error("🛑 Contexto perdido. Recargando...");
+            setTimeout(() => window.location.reload(), 2000);
+            return;
+        }
 
-        const match = formulaNode.innerText.trim().match(/^([\d.]+)/);
-        if (match) {
-            const precioBCV = parseFloat(match[1]);
 
-            // FÓRMULA: (Valor de Tracker * 100) / BCV
-            const porcentajeCalculado = ((valorObjetivo * 100) / precioBCV).toFixed(1);
 
-            const inputRate = document.querySelector('input[name="rate"]');
+        // Pedimos exactamente las llaves que guarda el popup.js
+        chrome.storage.local.get([
+            'bcvCaptureActive',
+            'p2p_stats',
+            'totalAmount',
+            'minLimit',
+            'maxLimit',
+            'centimosDebajo',
+            'maxOrdersCount', // <--- ¿Agregaste esto?
+            'maxFiatTotal'
+        ], (res) => {
+            if (chrome.runtime.lastError || !isContextValid()) return;
 
-            if (inputRate) {
-                // Solo inyectar si el valor es diferente para evitar refrescos infinitos
-                if (parseFloat(inputRate.value) !== parseFloat(porcentajeCalculado)) {
+            // Si el switch principal está apagado, no hacemos nada
+            if (!res.bcvCaptureActive) {
+                // console.log("Monitor en pausa (Switch OFF)");
+                return;
+            }
 
-                    console.log(`%c[Monitor] 🎯 Objetivo P2P: ${valorObjetivo} | BCV: ${precioBCV}`, "color: #f3ba2f");
+            // --- 1. LÓGICA DE PRECIO (RATE) ---
 
-                    inputRate.focus();
 
-                    // Inyección simulando teclado físico
-                    document.execCommand('selectAll', false, null);
-                    document.execCommand('insertText', false, porcentajeCalculado);
+            // --- 1. LÓGICA DE PRECIO (RATE) ---
 
-                    // Disparar eventos para Binance
-                    inputRate.dispatchEvent(new Event('input', { bubbles: true }));
-                    inputRate.dispatchEvent(new Event('change', { bubbles: true }));
+            if (res.p2p_stats) {
+                try {
+                    const stats = JSON.parse(res.p2p_stats);
 
-                    setTimeout(() => inputRate.blur(), 200);
+                    const obtenerTipoAnuncio = () => {
+                        const el = document.querySelector("#c2c_advDetail_price > div.css-lduul0 > div:first-child");
+                        if (el) return el.innerText.trim();
+                        console.warn("⚠️ No se pudo detectar el tipo de anuncio.");
+                        return null;
+                    };
 
-                    console.log(`%c[Monitor] ✅ Inyectado: ${porcentajeCalculado}%`, "color: #00ff00; font-weight: bold;");
+                    const adType = obtenerTipoAnuncio();
+                    if (!adType) return;
+
+                    let valorMarketPrincipal = 0;
+                    let valorMarketSecundario = 0;
+                    let etiquetaPrincipal = "";
+                    let etiquetaSecundaria = "";
+                    let valorObjetivo = 0;
+
+                    const resta = parseFloat(res.centimosDebajo) || 0;
+                    const buyPriceMarket = parseFloat(stats.buy_price) || 0;
+                    const sellPriceMarket = parseFloat(stats.sell_price) || 0;
+
+                    // Configuración dinámica según el tipo de anuncio
+                    if (adType === 'SELL') {
+                        // Principal es BUY (donde compiten los que te compran a ti)
+                        valorMarketPrincipal = buyPriceMarket;
+                        etiquetaPrincipal = "Mkt Buy";
+
+                        valorMarketSecundario = sellPriceMarket;
+                        etiquetaSecundaria = "Mkt Sell";
+
+                        valorObjetivo = valorMarketPrincipal - resta;
+                    } else {
+                        // Principal es SELL (donde compiten los que te venden a ti)
+                        valorMarketPrincipal = sellPriceMarket;
+                        etiquetaPrincipal = "Mkt Sell";
+
+                        valorMarketSecundario = buyPriceMarket;
+                        etiquetaSecundaria = "Mkt Buy";
+
+                        valorObjetivo = valorMarketPrincipal + resta;
+                    }
+
+                    const formulaNode = Array.from(document.querySelectorAll('div')).find(el =>
+                        el.innerText.includes('*') && el.innerText.includes('%') && el.children.length === 0
+                    );
+
+                    if (formulaNode && !isNaN(valorObjetivo)) {
+                        const bcvMatch = formulaNode.innerText.match(/^([\d.]+)/);
+                        if (bcvMatch) {
+                            const precioBCV = parseFloat(bcvMatch[1]);
+                            const porcentaje = ((valorObjetivo * 100) / precioBCV).toFixed(2);
+                            const horaActual = new Date().toLocaleTimeString();
+
+                            const colorTipo = adType === 'SELL' ? 'background: #ea3943;' : 'background: #27ae60;';
+
+                            // LOG CON AMBOS PRECIOS (El principal va primero)
+                            console.log(
+                                `%c [${horaActual}] %c ${adType} %c ${etiquetaPrincipal}: ${valorMarketPrincipal.toFixed(2)} %c ${etiquetaSecundaria}: ${valorMarketSecundario.toFixed(2)} %c Obj: ${valorObjetivo.toFixed(2)} %c Rate: ${porcentaje}% `,
+                                "background: #1e2329; color: #848e9c; padding: 2px 5px;",
+                                `${colorTipo} color: #fff; font-weight: bold; padding: 2px 5px;`,
+                                "background: #f3ba2f; color: #111010; font-weight: bold; padding: 2px 5px;", // Principal (Amarillo resaltado)
+                                "background: #474d57; color: #fff; padding: 2px 5px;",                       // Secundario (Gris)
+                                "background: #e40909; color: #ffffff; font-weight: bold; padding: 2px 5px;",
+                                "background: #2b3139; color: #27ae60; border-radius: 0 3px 3px 0; padding: 2px 5px; font-weight: bold; border: 1px solid #27ae60;"
+                            );
+
+                            const inputRate = document.querySelector('input[name="rate"]');
+                            if (inputRate) {
+                                secureInject(inputRate, porcentaje, `RATE ${adType} (%)`);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("❌ Error en cálculos de monitor:", e);
                 }
             }
-        }
+
+            // --- 2. LÓGICA DE MONTOS (SELECCIÓN POR POSICIÓN) ---
+
+
+            // A. TOTAL AMOUNT (El input de arriba, fuera de la caja de límites)
+            // Buscamos el input que NO esté dentro del div de los límites (gap-xl)
+            const allTradingInputs = document.querySelectorAll('input[aria-label="Enter trading amount"]');
+            let inputTotal = null;
+
+            if (allTradingInputs.length > 1) {
+                // Si hay varios, el Total suele ser el primero de la página
+                inputTotal = allTradingInputs[0];
+            } else {
+                inputTotal = document.querySelector('input[name="amount"]') || allTradingInputs[0];
+            }
+
+            if (inputTotal && res.totalAmount) {
+                secureInject(inputTotal, res.totalAmount, "TOTAL AMOUNT");
+            }
+
+            // B. LÍMITES (MIN Y MAX)
+            const contenedorLimites = document.querySelector('.w-full.gap-xl.css-4cffwv');
+
+            if (contenedorLimites) {
+                const inputsLimites = contenedorLimites.querySelectorAll('input');
+
+                if (inputsLimites.length >= 2) {
+                    // En el div que pasaste, el primer input es el MIN y el segundo el MAX
+                    if (res.minLimit) {
+                        secureInject(inputsLimites[0], res.minLimit, "MIN LIMIT");
+                    }
+                    if (res.maxLimit) {
+                        secureInject(inputsLimites[1], res.maxLimit, "MAX LIMIT");
+                    }
+                }
+            }
+
+            verificarFrenosDeEmergencia(res);
+        });
     }
 
-    // Bucle de ejecución
-    setInterval(ejecutarLogicaDinamica, POLLING_TIME);
+    if (mainInterval) clearInterval(mainInterval);
+    mainInterval = setInterval(ejecutarLogicaDinamica, POLLING_TIME);
 })();

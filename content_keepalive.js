@@ -12,14 +12,25 @@
     const KeepAliveAdapters = {
         "banesconline.com": {
             pages: [
-                "Default.aspx",
-                "consultamovimientoscuenta/movimientoscuenta.aspx"
+                "https://www.banesconline.com/Mantis/WebSite/Default.aspx",
+                "https://www.banesconline.com/Mantis/WebSite/consultamovimientoscuenta/movimientoscuenta.aspx"
+            ]
+        },
+        "bdvenlinea.banvenez.com": {
+            pages: [
+                "https://bdvenlinea.banvenez.com/main/posicionconsolidada",
+                "https://bdvenlinea.banvenez.com/main/referencias-bancarias"
+            ]
+        },
+        "online.bancamiga.com": {
+            refreshOnly: true, // <--- Nueva bandera para solo refrescar
+            pages: [
+                "https://online.bancamiga.com/?p=1"
             ]
         }
     };
 
     function maintainSession() {
-        // SOLUCIÓN: Solo pedimos y validamos keepAliveActive
         chrome.storage.local.get(['keepAliveActive'], (res) => {
 
             if (!res.keepAliveActive) {
@@ -30,29 +41,42 @@
             const currentUrl = window.location.href.toLowerCase();
             const hostname = window.location.hostname;
 
-            for (const [key, config] of Object.entries(KeepAliveAdapters)) {
-                if (hostname.includes(key)) {
+            const adapterKey = Object.keys(KeepAliveAdapters).find(key => hostname.includes(key));
 
-                    const currentIndex = config.pages.findIndex(p =>
-                        currentUrl.includes(p.toLowerCase())
-                    );
+            if (adapterKey) {
+                const config = KeepAliveAdapters[adapterKey];
 
-                    if (currentIndex !== -1) {
-                        const nextIndex = (currentIndex === 0) ? 1 : 0;
-                        const baseUrl = window.location.origin + "/Mantis/WebSite/";
-                        const nextUrl = baseUrl + config.pages[nextIndex];
+                // 1. CASO BANCAMIGA (O cualquier adapter con refreshOnly)
+                if (config.refreshOnly) {
+                    // Verificamos que estemos en la página correcta para no refrescar el login por error
+                    const isInAllowedPage = config.pages.some(p => currentUrl.includes(p.toLowerCase()));
 
-                        console.log(`%c[KeepAlive] Independiente: Saltando a -> ${nextUrl}`, "color: #3498db; font-weight: bold;");
-                        window.location.href = nextUrl;
-                    } else {
-                        if (isDebugEnabled) console.log("[KeepAlive] Fuera de zona segura.");
+                    if (isInAllowedPage) {
+                        console.log("%c[KeepAlive] Refrescando página actual en Bancamiga...", "color: #27ae60; font-weight: bold;");
+                        window.location.reload();
+                    } else if (isDebugEnabled) {
+                        console.log("[KeepAlive] Bancamiga: No se refresca porque no estamos en la página mapeada.");
                     }
-                    break;
+                    return; // Salimos para que no intente la lógica de alternar
+                }
+
+                // 2. CASO BANESCO / BDV (Alternar entre páginas)
+                const currentIndex = config.pages.findIndex(p =>
+                    currentUrl.includes(p.toLowerCase().split('?')[0])
+                );
+
+                if (currentIndex !== -1) {
+                    const nextIndex = (currentIndex === 0) ? 1 : 0;
+                    const nextUrl = config.pages[nextIndex];
+
+                    console.log(`%c[KeepAlive] Alternando a -> ${nextUrl}`, "color: #3498db; font-weight: bold;");
+                    window.location.href = nextUrl;
+                } else if (isDebugEnabled) {
+                    console.log("[KeepAlive] Fuera de zona segura.");
                 }
             }
         });
     }
 
-    // Intervalo de 25 segundos
     setInterval(maintainSession, 25000);
 }

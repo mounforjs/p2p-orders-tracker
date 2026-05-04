@@ -246,11 +246,72 @@
     <div class="config-card">
       <span class="card-title">CONTROLES DEL SISTEMAS</span>
 
+      <div class="config-section">
+        <h3>Configuración de Spread (%)</h3>
+        <div class="input-group">
+          <label>Mínimo:</label>
+          <input type="number" id="minSpread" step="0.01" placeholder="0.40">
+        </div>
+        <div class="input-group">
+          <label>Máximo:</label>
+          <input type="number" id="maxSpread" step="0.01" placeholder="1.50">
+        </div>
+      </div>
+
+      <div class="row" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+        <span class="bold">Auto-Offline (Frenos)</span>
+      </div>
+
+      <div class="row">
+        <label style="font-size: 12px;">Máx. Órdenes:</label>
+        <input type="number" id="maxOrdersCount" placeholder="Ej: 10" style="width: 80px;">
+      </div>
+
+      <div class="row">
+        <label style="font-size: 12px;">Monto Fiat Acumulado:</label>
+        <input type="number" id="maxFiatTotal" placeholder="Ej: 2000000" style="width: 120px;">
+      </div>
+
+
       <!-- NUEVO: Toggle para el Order monitor BCV -->
       <div class="row" style="margin-bottom: 15px; border-bottom: 1px dashed #eee; padding-bottom: 10px;">
         <span class="bold">Order Monitor</span>
         <input type="checkbox" id="bcvCaptureToggle">
       </div>
+
+      <!-- Dentro de #orderSettingsContainer -->
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+        <label class="bold" style="flex: 1;">Céntimos debajo:</label>
+        <input type="number" id="centimosDebajo" placeholder="0.01" step="0.01" style="width: 80px;">
+      </div>
+
+      <!-- Sección de controles que se habilitará/deshabilitará -->
+      <!-- Sección de controles que se habilitará/deshabilitará -->
+      <div id="orderSettingsContainer"
+        style="display: flex; flex-direction: column; gap: 10px; opacity: 0.5; pointer-events: none; transition: all 0.3s ease; background: #f9f9f9; padding: 12px; border-radius: 8px; border: 1px solid #eee;">
+
+        <div class="row">
+          <label class="bold" style="font-size: 12px;">Monto Total (Orden):</label>
+          <input type="number" id="totalAmount" placeholder="Ej: 5000" step="0.01" style="width: 120px;">
+        </div>
+
+        <div class="row">
+          <label class="bold" style="font-size: 12px;">Límite Mínimo:</label>
+          <input type="number" id="minLimit" placeholder="Ej: 500" style="width: 120px;">
+        </div>
+
+        <div class="row">
+          <label class="bold" style="font-size: 12px;">Límite Máximo:</label>
+          <input type="number" id="maxLimit" placeholder="Ej: 10000" style="width: 120px;">
+        </div>
+
+        <button id="saveOrderSettings"
+          style="background: #27ae60; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-top: 5px;">
+          Guardar Configuración
+        </button>
+      </div>
+
+      <br><br>
 
       <!-- Toggle para Monitoreo de Saldos -->
       <div class="row">

@@ -4,7 +4,8 @@
   "version": "1.0",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "tab"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -16,7 +17,8 @@
         "https://c2c.binance.com/*/fiatOrderDetail*",
         "https://c2c.binance.com/*/fiatOrderDetail*",
         "https://www.banesconline.com/*",
-        "https://p2p.binance.com/*/trade/*"
+        "https://p2p.binance.com/*/trade/*",
+        "https://*.binance.com/*/advEdit*"
       ],
       "js": [
         "content.js"
@@ -35,7 +37,8 @@
       "matches": [
         "https://*.banesconline.com/*",
         "https://bdvenlinea.banvenez.com/*",
-        "https://*.mercantilbanco.com/*"
+        "https://*.mercantilbanco.com/*",
+        "https://online.bancamiga.com/*"
       ],
       "js": [
         "content_saldos.js"
@@ -45,7 +48,9 @@
     },
     {
       "matches": [
-        "https://*.banesconline.com/*"
+        "https://*.banesconline.com/*",
+        "https://bdvenlinea.banvenez.com/*",
+        "https://online.bancamiga.com/*"
       ],
       "js": [
         "content_keepalive.js"

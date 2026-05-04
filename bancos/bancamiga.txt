@@ -1,0 +1,78 @@
+(function() {
+    // 1. DATOS DE PRUEBA
+    const dataPrueba = {
+        cedula: "26123456",
+        fullName: "ALEX DESARROLLADOR",
+        monto: 1250.75,
+        telefono: "04129876543", // Formato estándar venezolano
+        bankName: "BANESCO"      // Nombre del banco a buscar
+    };
+
+    console.log("🚀 Iniciando prueba técnica en Bancamiga...");
+
+    // 2. FUNCIÓN DE FUERZA (Simula escritura real para saltar máscaras)
+    const forceUpdate = (el, value) => {
+        if (el) {
+            el.value = value;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+            console.log(`✅ Campo llenado: ${el.name || el.id}`);
+        } else {
+            console.warn(`⚠️ No se encontró el elemento para el valor: ${value}`);
+        }
+    };
+
+    // --- FLUJO DE INYECCIÓN ---
+
+    // A. SELECCIONAR CUENTA DE ORIGEN
+    const selectDesde = document.querySelector('select[name="desde"]');
+    if (selectDesde && selectDesde.options.length > 1) {
+        selectDesde.selectedIndex = 1; // Selecciona la primera cuenta con saldo
+        selectDesde.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // B. PROCESAR TELÉFONO (58 + 412 + 7 dígitos)
+    const telf = dataPrueba.telefono.trim();
+    if (telf.length >= 10) {
+        const codigoArea = "58" + telf.substring(1, 4); // Resultado: 58412
+        const restoNumero = telf.substring(4);           // Resultado: 9876543
+
+        // Seleccionar código de área
+        const selArea = document.querySelector('select[name="codigoArea"]');
+        if (selArea) {
+            selArea.value = codigoArea;
+            selArea.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // Inyectar los 7 dígitos en el campo específico
+        forceUpdate(document.querySelector('input[name="numeroTelefono"]'), restoNumero);
+    }
+
+    // C. CÉDULA Y NOMBRE
+    forceUpdate(document.querySelector('input[name="docbeneficiario"]'), dataPrueba.cedula);
+    forceUpdate(document.querySelector('input[name="nombrebeneficiario"]'), dataPrueba.fullName);
+
+    // D. MONTO (Bancamiga usa coma para decimales)
+    const montoVES = dataPrueba.monto.toString().replace('.', ',');
+    forceUpdate(document.querySelector('input[name="monto"]'), montoVES);
+
+    // E. CONCEPTO
+    forceUpdate(document.querySelector('input[name="concepto"]'), `Pago P2P ${dataPrueba.fullName}`);
+
+    // F. SELECCIÓN DE BANCO DESTINO
+    const selectBanco = document.querySelector('select[name="banco"]');
+    if (selectBanco) {
+        const opciones = Array.from(selectBanco.options);
+        const buscar = dataPrueba.bankName.toUpperCase();
+        const encontrado = opciones.find(opt => opt.text.toUpperCase().includes(buscar));
+        
+        if (encontrado) {
+            selectBanco.value = encontrado.value;
+            selectBanco.dispatchEvent(new Event('change', { bubbles: true }));
+            console.log(`✅ Banco destino: ${encontrado.text}`);
+        }
+    }
+
+    console.log("🏁 Inyección de consola finalizada.");
+})();
