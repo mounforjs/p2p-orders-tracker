@@ -275,6 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
           eliminarOrden(idParaBorrar);
         };
       });
+
+
     });
   }
 
@@ -290,11 +292,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function eliminarRegistro(id) {
-    chrome.storage.local.get(['savedOrders'], (res) => {
-      const orders = res.savedOrders || {};
-      delete orders[id];
-      chrome.storage.local.set({ savedOrders: orders }, renderTable);
+  function eliminarOrden(id) {
+    // 1. Buscamos lo que hay en storage
+    chrome.storage.local.get(['savedOrders'], (result) => {
+      let orders = result.savedOrders || {};
+
+      // 2. Verificamos si existe y la eliminamos del objeto
+      if (orders[id]) {
+        delete orders[id];
+
+        // 3. Guardamos el objeto actualizado de vuelta
+        chrome.storage.local.set({ savedOrders: orders }, () => {
+          console.log(`Orden ${id} eliminada correctamente.`);
+
+          // 4. Refrescamos la vista del popup para que desaparezca la fila
+          renderizarOrdenes();
+
+          // 5. Actualizamos el totalizador (bolívares totales)
+          if (typeof actualizarTotalizador === 'function') {
+            actualizarTotalizador();
+          }
+        });
+      }
     });
   }
 

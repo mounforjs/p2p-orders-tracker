@@ -382,25 +382,7 @@
         });
     }
 
-    /**
-     * Función auxiliar para limpiar strings y convertirlos a números operables
-     */
-    function limpiarNumero(texto) {
-        if (!texto) return 0;
-        // Eliminamos todo lo que no sea número, coma o punto (como "VES" o "USDT")
-        let limpio = texto.replace(/[^\d.,]/g, '');
 
-        // Lógica para manejar formatos internacionales:
-        // Si hay coma y punto, asumimos formato 1,234.56 -> quitamos coma, mantenemos punto
-        if (limpio.includes(',') && limpio.includes('.')) {
-            limpio = limpio.replace(/,/g, '');
-        } else {
-            // Si solo hay coma (formato 1234,56), la cambiamos por punto para parseFloat
-            limpio = limpio.replace(',', '.');
-        }
-
-        return parseFloat(limpio) || 0;
-    }
 
     function extraerDatosDetalle() {
         const extraerPorLabel = (label) => {
