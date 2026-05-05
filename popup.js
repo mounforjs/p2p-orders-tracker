@@ -247,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
                 <td><span style="font-weight:bold">${order.orden || ordenId}</span></td>
                 <td class="bold">${montoLimpio.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+                <td class="bold">${order.price}</td>
                 <td>${order.fullName || '<span style="color:#999; font-style:italic">Esperando...</span>'}</td>
                 <td>${order.idNumber || '-'}</td>
                 <td>${order.phoneNumber || '-'}</td>

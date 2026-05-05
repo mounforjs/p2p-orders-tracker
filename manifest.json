@@ -14,8 +14,9 @@
     {
       "matches": [
         "https://c2c.binance.com/*/fiatOrder*",
+        "https://p2p.binance.com/*/fiatOrder*",
         "https://c2c.binance.com/*/fiatOrderDetail*",
-        "https://c2c.binance.com/*/fiatOrderDetail*",
+        "https://p2p.binance.com/*/fiatOrderDetail*",
         "https://www.banesconline.com/*",
         "https://p2p.binance.com/*/trade/*",
         "https://*.binance.com/*/advEdit*"

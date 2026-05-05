@@ -329,30 +329,43 @@
             let nuevas = 0;
 
             rows.forEach((row) => {
+                // 1. Capturar Estado (Columna 6)
                 const statusCell = row.querySelector('td[aria-colindex="6"]');
                 const statusAnchor = statusCell ? statusCell.querySelector('a') : null;
                 const statusText = statusAnchor ? statusAnchor.innerText.trim() : "";
 
-                // Capturamos tanto "Pending payment" como "Paid" si fuera necesario
+                // Filtramos solo las que están pendientes de pago
                 if (statusText === "Pending payment") {
+
+                    // 2. Capturar ID de Orden (Columna 2)
                     const orderLink = row.querySelector('td[aria-colindex="2"] a');
-                    const priceCell = row.querySelector('td[aria-colindex="3"] .text-PrimaryText');
 
-                    // --- NUEVA LÓGICA: Captura de Tipo (Buy/Sell) ---
-                    const typeCell = row.querySelector('td[aria-colindex="1"] .text-Buy, td[aria-colindex="1"] .text-Sell, td[aria-colindex="1"] [class*="text-"]');
-                    const adType = typeCell ? typeCell.innerText.trim() : "Unknown";
+                    // 3. Capturar Precio (Columna 3) - Selector Confirmado
+                    const priceCell = row.querySelector('td[aria-colindex="3"] p.text-PrimaryText');
 
-                    if (orderLink && priceCell) {
+                    // 4. Capturar Monto Fiat (Columna 4) - Tomamos el primer párrafo con el monto
+                    const fiatCell = row.querySelector('td[aria-colindex="4"] p.text-PrimaryText');
+
+                    // 5. Capturar Tipo: Buy/Sell (Columna 1)
+                    // Buscamos las clases específicas de Binance para el color del tipo
+                    const typeElement = row.querySelector('td[aria-colindex="1"] .text-Sell, td[aria-colindex="1"] .text-Buy');
+                    const adType = typeElement ? typeElement.innerText.trim() : "Unknown";
+
+                    if (orderLink && priceCell && fiatCell) {
                         const orderId = orderLink.innerText.trim();
+
+                        // Si la orden es nueva, la guardamos
                         if (!savedOrders[orderId]) {
                             savedOrders[orderId] = {
                                 orden: orderId,
-                                type: adType, // Guardamos si es Buy o Sell
+                                type: adType,
                                 price: limpiarNumero(priceCell.innerText.trim()),
+                                fiatAmount: limpiarNumero(fiatCell.innerText.trim()),
                                 estado: statusText,
                                 fecha: new Date().toLocaleString()
                             };
                             nuevas++;
+                            console.log(`✨ Nueva orden detectada: ${orderId} (${adType})`);
                         }
                     }
                 }
@@ -360,10 +373,33 @@
 
             if (nuevas > 0) {
                 chrome.storage.local.set({ savedOrders }, () => {
-                    actualizarTotalizador();
+                    console.log(`✅ Guardadas ${nuevas} órdenes nuevas.`);
+                    if (typeof actualizarTotalizador === 'function') {
+                        actualizarTotalizador();
+                    }
                 });
             }
         });
+    }
+
+    /**
+     * Función auxiliar para limpiar strings y convertirlos a números operables
+     */
+    function limpiarNumero(texto) {
+        if (!texto) return 0;
+        // Eliminamos todo lo que no sea número, coma o punto (como "VES" o "USDT")
+        let limpio = texto.replace(/[^\d.,]/g, '');
+
+        // Lógica para manejar formatos internacionales:
+        // Si hay coma y punto, asumimos formato 1,234.56 -> quitamos coma, mantenemos punto
+        if (limpio.includes(',') && limpio.includes('.')) {
+            limpio = limpio.replace(/,/g, '');
+        } else {
+            // Si solo hay coma (formato 1234,56), la cambiamos por punto para parseFloat
+            limpio = limpio.replace(',', '.');
+        }
+
+        return parseFloat(limpio) || 0;
     }
 
     function extraerDatosDetalle() {
