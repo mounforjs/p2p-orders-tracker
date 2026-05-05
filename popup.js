@@ -164,33 +164,115 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
+  function asignarEventosBotones() {
+    // Botón Eliminar
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+      btn.onclick = (e) => {
+        const id = e.target.dataset.id;
+        chrome.storage.local.get(['savedOrders'], (result) => {
+          let orders = result.savedOrders || {};
+          delete orders[id];
+          chrome.storage.local.set({ savedOrders: orders }, () => renderTable());
+        });
+      };
+    });
+
+    // Botón Copiar/Rellenar (Aquí puedes programar que rellene tu banco)
+    document.querySelectorAll('.btn-fill').forEach(btn => {
+      btn.onclick = (e) => {
+        const id = e.target.dataset.id;
+        alert("Datos de la orden " + id + " listos para procesar.");
+        // Aquí podrías enviar un mensaje al content script para auto-rellenar
+      };
+    });
+  }
+
+  // --- Renderizado de la Tabla de Órdenes ---
   function renderTable() {
-    if (!tableBody) return;
-    chrome.storage.local.get(['savedOrders'], (res) => {
-      const orders = res.savedOrders || {};
+
+    const tableBody = document.getElementById('tableBody');
+    const totalDisplay = document.getElementById('total-display');
+    const noDataMsg = document.getElementById('noDataMsg');
+
+    chrome.storage.local.get(['savedOrders'], (result) => {
+      const orders = result.savedOrders || {};
+      const orderKeys = Object.keys(orders);
+
+      // 1. Resetear variables antes de empezar
+      let acumuladoFiat = 0;
       tableBody.innerHTML = '';
-      const orderIds = Object.keys(orders).sort((a, b) => new Date(orders[b].ultimaActualizacion || orders[b].fecha) - new Date(orders[a].ultimaActualizacion || orders[a].fecha));
 
-      document.getElementById('noDataMsg').style.display = orderIds.length === 0 ? 'block' : 'none';
+      if (orderKeys.length === 0) {
+        if (noDataMsg) noDataMsg.style.display = 'block';
+        if (totalDisplay) totalDisplay.innerText = '0,00';
+        return;
+      }
 
-      orderIds.forEach(id => {
-        const o = orders[id];
-        const cleanCedula = o.idNumber ? o.idNumber.toString().replace(/\D/g, '') : '---';
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-                    <td class="col-order">...${id.slice(-6)}</td>
-                    <td class="col-fiat">${o.fiatAmount}</td>
-                    <td class="col-name">${o.fullName}</td>
-                    <td class="col-info">${cleanCedula}</td>
-                    <td class="col-phone">${o.phoneNumber || '---'}</td>
-                    <td class="col-bank">${o.bankName}</td>
-                    <td>
-                        <button class="btn-action btn-fill">Fill</button>
-                        <button class="btn-action btn-delete">X</button>
-                    </td>`;
-        tr.querySelector('.btn-fill').addEventListener('click', () => inyectarEnBanco(o));
-        tr.querySelector('.btn-delete').addEventListener('click', () => eliminarRegistro(id));
-        tableBody.appendChild(tr);
+      if (noDataMsg) noDataMsg.style.display = 'none';
+
+      // 2. Ordenar las llaves por fecha
+      const sortedKeys = orderKeys.sort((a, b) => {
+        return new Date(orders[b].fecha || 0) - new Date(orders[a].fecha || 0);
+      });
+
+      // 3. Procesar cada orden
+      sortedKeys.forEach(ordenId => {
+        const order = orders[ordenId];
+
+        // --- LIMPIEZA DE MONTO PARA EL TOTALIZADOR ---
+        let montoLimpio = 0;
+        if (order.fiatAmount) {
+          // Convertimos a string por seguridad, quitamos puntos de miles y cambiamos coma por punto
+          let strMonto = String(order.fiatAmount)
+            .replace(/\./g, '')  // Quita puntos (1.500 -> 1500)
+            .replace(',', '.');  // Cambia coma decimal por punto (1500,50 -> 1500.50)
+          montoLimpio = parseFloat(strMonto) || 0;
+        }
+
+        // Sumar al total
+        acumuladoFiat += montoLimpio;
+
+        // --- RENDERIZADO DE LA FILA ---
+        const isBuy = order.type === 'Buy' || order.type === 'Compra';
+        const typeLabel = isBuy ? 'COMPRA' : 'VENTA';
+        const typeColor = isBuy ? '#27ae60' : '#ea3943';
+        const typeBg = isBuy ? '#eafff1' : '#fff1f0';
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+                <td>
+                    <span style="background:${typeBg}; color:${typeColor}; border:1px solid ${typeColor}; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:9px;">
+                        ${typeLabel}
+                    </span>
+                </td>
+                <td><span style="font-weight:bold">${order.orden || ordenId}</span></td>
+                <td class="bold">${montoLimpio.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+                <td>${order.fullName || '<span style="color:#999; font-style:italic">Esperando...</span>'}</td>
+                <td>${order.idNumber || '-'}</td>
+                <td>${order.phoneNumber || '-'}</td>
+                <td style="font-size:10px">${order.bankName || '-'}</td>
+                <td>
+                    <button class="btn-action btn-delete" data-id="${ordenId}" style="background:#ff4d4f; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button>
+                </td>
+            `;
+        tableBody.appendChild(row);
+      });
+
+      // 4. ACTUALIZAR TOTALIZADOR (FUERA DEL BUCLE)
+      console.log("Suma final calculada:", acumuladoFiat); // Debug en consola
+      if (totalDisplay) {
+        totalDisplay.innerText = acumuladoFiat.toLocaleString('es-VE', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+      }
+
+      // 5. Re-vincular botones de eliminar
+      document.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.onclick = (e) => {
+          const idParaBorrar = e.currentTarget.getAttribute('data-id');
+          eliminarOrden(idParaBorrar);
+        };
       });
     });
   }
@@ -215,33 +297,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.getElementById('clearDataBtn')?.addEventListener('click', () => {
-    if (confirm("¿Borrar todos los registros?")) chrome.storage.local.remove(['savedOrders'], renderTable);
-  });
+  document.getElementById('clearDataBtn').onclick = () => {
+    if (confirm("¿Eliminar todas las órdenes capturadas?")) {
+      chrome.storage.local.set({ savedOrders: {} }, () => renderTable());
+    }
+  };
 
   document.getElementById('testDataBtn')?.addEventListener('click', () => {
-    const montoPrueba = 400.50; // Es mejor usar números reales para probar decimales
-
     chrome.storage.local.get(['savedOrders'], (res) => {
       let ordenesExistentes = res.savedOrders || {};
 
-      for (let i = 0; i < 5; i++) {
-        const id = "TEST_" + Date.now() + "_" + i;
-        ordenesExistentes[id] = {
-          id: id,
-          fiatAmount: montoPrueba,
-          monto: montoPrueba,
-          bankName: "BANCO DE VENEZUELA", // Nombre que tu "obtenerCodigo" reconozca
-          cedula: "25123456",            // Con letra para probar tu regex de limpieza
-          telefono: "04121234567",        // Propiedad que faltaba
-          fullName: `ORDEN PRUEBA ${i + 1}`,
-          fecha: new Date().toLocaleString()
+      for (let i = 0; i < 3; i++) {
+        const tempId = "TEST_" + Math.floor(Math.random() * 1000);
+
+        ordenesExistentes[tempId] = {
+          orden: tempId,
+          type: i % 2 === 0 ? "Buy" : "Sell",
+          fiatAmount: "500.25", // Lo enviamos como String para simular captura real
+          fullName: "Usuario de Prueba " + i,
+          idNumber: "V12345678",
+          phoneNumber: "04141234567",
+          bankName: "MERCANTIL",
+          fecha: new Date().toISOString()
         };
       }
 
       chrome.storage.local.set({ savedOrders: ordenesExistentes }, () => {
-        console.log("✅ Datos de prueba inyectados correctamente:", ordenesExistentes);
-        alert("5 Órdenes de prueba inyectadas. Ahora puedes probar el auto-fill.");
+        renderTable(); // Forzamos actualización visual
       });
     });
   });

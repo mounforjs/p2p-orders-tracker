@@ -320,35 +320,6 @@
         return numStr;
     };
 
-    function extraerDatosDetalle() {
-        const extraerPorLabel = (label) => {
-            const etiquetas = Array.from(document.querySelectorAll('.body2.text-tertiaryText, .text-secondaryText, div'));
-            const targetLabel = etiquetas.find(el => el.innerText.trim() === label && el.children.length === 0);
-            if (targetLabel) {
-                const contenedor = targetLabel.closest('.bn-flex.justify-between') ||
-                    targetLabel.closest('.bn-flex.items-start.justify-between') ||
-                    targetLabel.parentElement.parentElement;
-                if (contenedor) {
-                    const valorEl = contenedor.querySelector('.text-right') ||
-                        contenedor.querySelector('.body2.w-full') ||
-                        contenedor.lastElementChild;
-                    return valorEl ? valorEl.innerText.trim() : null;
-                }
-            }
-            return null;
-        };
-
-        return {
-            fiatAmount: limpiarNumero(extraerPorLabel("Fiat amount"), true),
-            price: limpiarNumero(extraerPorLabel("Price")),
-            fullName: extraerPorLabel("Full name of receiver"),
-            idNumber: extraerPorLabel("ID number"),
-            phoneNumber: extraerPorLabel("Phone number"),
-            bankName: extraerPorLabel("Bank name"),
-            accountNumber: extraerPorLabel("Account number") || extraerPorLabel("Bank account number")
-        };
-    }
-
     function ejecutarCapturaLista() {
         const rows = document.querySelectorAll('tr.bn-web-table-row');
         if (rows.length === 0) return;
@@ -362,15 +333,21 @@
                 const statusAnchor = statusCell ? statusCell.querySelector('a') : null;
                 const statusText = statusAnchor ? statusAnchor.innerText.trim() : "";
 
+                // Capturamos tanto "Pending payment" como "Paid" si fuera necesario
                 if (statusText === "Pending payment") {
                     const orderLink = row.querySelector('td[aria-colindex="2"] a');
                     const priceCell = row.querySelector('td[aria-colindex="3"] .text-PrimaryText');
+
+                    // --- NUEVA LÓGICA: Captura de Tipo (Buy/Sell) ---
+                    const typeCell = row.querySelector('td[aria-colindex="1"] .text-Buy, td[aria-colindex="1"] .text-Sell, td[aria-colindex="1"] [class*="text-"]');
+                    const adType = typeCell ? typeCell.innerText.trim() : "Unknown";
 
                     if (orderLink && priceCell) {
                         const orderId = orderLink.innerText.trim();
                         if (!savedOrders[orderId]) {
                             savedOrders[orderId] = {
                                 orden: orderId,
+                                type: adType, // Guardamos si es Buy o Sell
                                 price: limpiarNumero(priceCell.innerText.trim()),
                                 estado: statusText,
                                 fecha: new Date().toLocaleString()
@@ -388,6 +365,49 @@
             }
         });
     }
+
+    function extraerDatosDetalle() {
+        const extraerPorLabel = (label) => {
+            // Lista de selectores que Binance usa para las etiquetas de la izquierda
+            const etiquetas = Array.from(document.querySelectorAll('.body2.text-tertiaryText, .text-secondaryText, div'));
+
+            // Buscamos la etiqueta exacta que no tenga hijos (el nodo de texto final)
+            const targetLabel = etiquetas.find(el => el.innerText.trim() === label && el.children.length === 0);
+
+            if (targetLabel) {
+                // Buscamos el contenedor que agrupa etiqueta y valor
+                const contenedor = targetLabel.closest('.bn-flex.justify-between') ||
+                    targetLabel.closest('.bn-flex.items-start.justify-between') ||
+                    targetLabel.parentElement.parentElement;
+                if (contenedor) {
+                    // El valor suele estar en la parte derecha (text-right) o ser el último hijo
+                    const valorEl = contenedor.querySelector('.text-right') ||
+                        contenedor.querySelector('.body2.w-full') ||
+                        contenedor.lastElementChild;
+                    return valorEl ? valorEl.innerText.trim() : null;
+                }
+            }
+            return null;
+        };
+
+        // Detectamos si estamos en una orden de compra o venta por los campos presentes
+        const price = limpiarNumero(extraerPorLabel("Price"));
+        const fiatAmount = limpiarNumero(extraerPorLabel("Fiat amount"), true);
+
+        // Si es una orden tipo BUY de Binance, muchos de estos labels no existirán 
+        // y devolverán null automáticamente, lo cual está bien.
+        return {
+            fiatAmount: fiatAmount,
+            price: price,
+            fullName: extraerPorLabel("Full name of receiver") || extraerPorLabel("Counterparty's real name"),
+            idNumber: extraerPorLabel("ID number"),
+            phoneNumber: extraerPorLabel("Phone number"),
+            bankName: extraerPorLabel("Bank name"),
+            accountNumber: extraerPorLabel("Account number") || extraerPorLabel("Bank account number")
+        };
+    }
+
+
 
     function ejecutarCapturaDetalle(orderNo) {
         if (!orderNo) return;
